@@ -1,5 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { appendFile, mkdir } from 'fs/promises';
+import { join } from 'path';
 import { verifyToken } from '@/lib/auth';
+
+export const runtime = 'nodejs';
+
+// Каждая расшифровка ложится на диск ДО отправки в браузер.
+// Причина: текст жил только в буфере терминала — случайный пробел или Ctrl+Z
+// стирали надиктованное целиком, восстановить было неоткуда (25.08.2026).
+const TRANSCRIPT_DIR = process.env.TRANSCRIPT_LOG_DIR
+  || join(process.cwd(), '.transcripts');
+
+async function saveTranscript(text: string): Promise<void> {
+  if (!text) return;
+  try {
+    await mkdir(TRANSCRIPT_DIR, { recursive: true });
+    const now = new Date();
+    const day = now.toISOString().slice(0, 10);
+    const line = JSON.stringify({ ts: now.toISOString(), text }) + '\n';
+    await appendFile(join(TRANSCRIPT_DIR, `${day}.jsonl`), line, 'utf-8');
+  } catch (err) {
+    // Запись в лог не должна ломать саму диктовку
+    console.error('[Transcribe] save failed:', err);
+  }
+}
 
 export async function POST(req: NextRequest) {
   // Auth check
@@ -42,7 +66,9 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json();
-    return NextResponse.json({ text: data.text || '' });
+    const text = data.text || '';
+    await saveTranscript(text.trim());
+    return NextResponse.json({ text });
   } catch (err) {
     console.error('[Transcribe] Error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });

@@ -41,3 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 data/
+
+# Расшифровки голосового ввода — личные данные, в публичный репозиторий не уходят
+.transcripts/
